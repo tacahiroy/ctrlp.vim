@@ -88,6 +88,8 @@ let [s:pref, s:bpref, s:opts, s:new_opts, s:lc_opts] =
 	\ 'use_caching':           ['s:caching', 1],
 	\ 'user_command':          ['s:usrcmd', ''],
 	\ 'working_path_mode':     ['s:pathmode', 'ra'],
+	\ 'preview_enabled':       ['s:prvwenabled', 0],
+	\ 'preview_height':        ['s:prvwheight', 10],
 	\ }, {
 	\ 'open_multiple_files':   's:opmul',
 	\ 'regexp':                's:regexp',
@@ -293,7 +295,7 @@ fu! s:Close()
 	if winnr('$') == 1
 		bw!
 	el
-		try | bun!
+		try | bun! | if exists('s:prvwbufnr') | exe 'bun! ' . s:prvwbufnr | unlet s:prvwbufnr | en
 		cat | clo! | endt
 		cal s:unmarksigns()
 	en
@@ -611,6 +613,8 @@ fu! s:BuildPrompt(upd)
 	if empty(prt[1]) && s:focus
 		exe 'echoh' hibase '| echon "_" | echoh None'
 	en
+
+  cal s:OpenPreview()
 endf
 " - SetDefTxt() {{{1
 fu! s:SetDefTxt()
@@ -764,6 +768,86 @@ fu! s:PrtSelectMove(dir)
 	exe 'keepj norm!' dirs[a:dir]
 	if s:nolim != 1 | let s:cline = line('.') | en
 	if line('$') > winheight(0) | cal s:BuildPrompt(0) | en
+  cal s:OpenPreview()
+endf
+
+fu! s:OpenPreview()
+	if !s:prvwenabled | retu | en
+
+	let line = ctrlp#getcline()
+	let extname = s:extname(s:ctype)
+	if !s:ispreviewable(extname) | return | en
+	let prvwbufname = '[ControlP Preview]'
+
+	" back to window of the current file
+	noau exe bufwinnr(s:crbufnr) . 'wincmd w'
+
+	" open/move to the preview buffer
+	if !exists('s:prvwbufnr') || !bufexists(s:prvwbufnr)
+		exe 'silent keepa topleft ' . s:prvwheight . 'new ' . prvwbufname
+		let s:prvwbufnr = bufnr(prvwbufname)
+		cal setbufvar(s:prvwbufnr, '&buftype', 'nofile')
+		cal setbufvar(s:prvwbufnr, '&buflisted', 0)
+	elsei bufwinnr(s:prvwbufnr) == -1
+		exe 'silent keepa topleft ' . s:prvwheight . 'sp +b' . s:prvwbufnr
+	en
+
+	let prvw = { 'curline': line,
+						 \ 'winnr': bufwinnr(s:prvwbufnr),
+						 \ 'height': s:prvwheight }
+
+	exe 'keepj ' . get(prvw, 'winnr') . 'wincmd w'
+
+	cal setwinvar(prvw.winnr, '&cul', 0)
+	cal setbufvar(s:prvwbufnr, '&ft', '')
+	silent exe '%delete _'
+
+	if !empty(line)
+		let PrvwFunc = s:getprvwfunc(extname)
+		call PrvwFunc(prvw)
+		if has('autocmd') && !ctrlp#nosy()
+			exe 'doau filetypedetect BufRead ' . prvw.curline
+		en
+		cal setbufvar(s:prvwbufnr, '&ma', 1)
+		cal setwinvar(prvw.winnr, '&fen', 0)
+	en
+
+	exe 'keepj ' . bufwinnr(s:bufnr) . 'wincmd w'
+endf
+
+" Gets file name for an extension
+fu! s:extname(ctype)
+	if a:ctype ==# 'files'
+		retu 'files'
+	elsei a:ctype ==# 'mru files'
+		retu 'mrufiles'
+	elsei a:ctype ==# 'tags'
+		retu 'tag'
+	el
+		retu a:ctype
+	en
+endf
+
+fu! s:filespreview(prvw)
+	" NOTE: s:dyncwd is always set?
+	let path = s:dyncwd . '/' . a:prvw.curline
+	if filereadable(path) | sil 0 put = readfile(path)[0:a:prvw.height] | en
+	cal cursor(1, 1)
+endf
+
+fu! s:ispreviewable(extname)
+	if a:extname ==# 'files'
+		retu 1
+	en
+	retu exists('*ctrlp#' . a:extname . '#preview')
+endf
+
+fu! s:getprvwfunc(extname)
+	if a:extname ==# 'files'
+		retu function('s:filespreview')
+	el
+		retu function('ctrlp#' . a:extname . '#preview')
+	en
 endf
 
 fu! s:PrtSelectJump(char)

@@ -133,6 +133,25 @@ fu! ctrlp#tag#enter()
 	let s:tagfiles = tfs != [] ? filter(map(tfs, 'fnamemodify(v:val, ":p")'),
 		\ 'filereadable(v:val)') : []
 endf
+
+fu! ctrlp#tag#preview(prvw)
+  " tag
+  let [tg, file, pat] = matchlist(a:prvw.curline, '^\([^\t]\+\)\t\([^\t]\+\)\t\([^\t]\+\)')[1:3]
+  if !empty(tg)
+    let tinfo = get(taglist(tg), 0, '')
+    if empty(tinfo) | return '' | en
+    let regex = substitute(tinfo.cmd, '^/\(.*\)/$', '\1', '')
+    let path = tinfo.filename
+
+    if filereadable(path)
+      sil 0 put = readfile(path)
+      cal cursor(1, 1)
+      exe get(split(tinfo.cmd, "\t"), 0, '')
+      normal! zz
+      cal setwinvar(a:prvw.winnr, '&cul', 1)
+    en
+  en
+endfu
 "}}}
 
 " vim:fen:fdm=marker:fmr={{{,}}}:fdl=0:fdc=1:ts=2:sw=2:sts=2

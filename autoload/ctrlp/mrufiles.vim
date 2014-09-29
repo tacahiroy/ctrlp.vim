@@ -149,6 +149,10 @@ fu! ctrlp#mrufiles#init()
 		au VimLeavePre * cal s:savetofile(s:mergelists())
 	aug END
 endf
+
+fu! ctrlp#mrufiles#preview(prvw)
+  if filereadable(a:prvw.curline) | sil 0 put = readfile(a:prvw.curline)[0:a:prvw.height] | en
+endfu
 "}}}
 
 " vim:fen:fdm=marker:fmr={{{,}}}:fdl=0:fdc=1:ts=2:sw=2:sts=2
